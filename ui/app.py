@@ -11,3 +11,15 @@ import sys
 
 import pywebview
 
+class AZDownloader():
+    def __init__(self):
+        pass
+
+    def download():
+        pass
+
+azd = AZDownloader()
+webview.create_window("Hello PyWebView", "https://www.python.org", jsapi=azd)
+#production - start with SSL?
+webview.start()
+

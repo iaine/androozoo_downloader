@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>AZ Downloader</title>
+        <link rel="stylesheet" href="styles.css">
+    </head>
+    <body>
+        <h2>AZ Downloader</h2>
+        <label for="story">AZ hashfiles</label>
+
+        <textarea id="story" name="story" rows="25" cols="20">
+        Put hash files from AZ catalogue here...
+        </textarea>
+        <div class="button-container">
+			<button id="inputValue" class="toggle-fullscreen" onclick="sendValue">Download</button>
+		</div>
+        <script type="text/javascript">
+            Copy
+        window.addEventListner("pywebviewready",function (){
+            sendValue()
+        });
+
+        function sendValue () {
+
+            // Get the input element by ID
+
+            var element = document.getElementById('inputValue');
+
+            var value = element.value;
+
+            pywebview.api.send_value(value)
+        }
+        </script>
+    </body>
+</html>
