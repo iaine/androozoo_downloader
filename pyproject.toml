@@ -1,0 +1,26 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "androzoo-downloader"
+version = "0.1.0"
+description = "Download APKs from AndroZoo given a list of sha256 hashes."
+readme = "README.md"
+requires-python = ">=3.11"          # tomllib is stdlib from 3.11
+license = { text = "MIT" }
+dependencies = []                    # core uses only the standard library
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+ui = ["pywebview>=5.0"]
+
+[project.scripts]
+azdownload = "download:main"
+
+[tool.hatch.build.targets.wheel]
+# download.py sits at the repo root; ship it as a single module.
+include = ["download.py"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
