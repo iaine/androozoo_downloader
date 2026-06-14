@@ -19,8 +19,8 @@ ui = ["pywebview>=5.0"]
 azdownload = "download:main"
 
 [tool.hatch.build.targets.wheel]
-# download.py sits at the repo root; ship it as a single module.
-include = ["download.py"]
+# download.py sits at the repo root; ship it plus the UI package and assets.
+include = ["download.py", "ui/**"]
 
 [tool.pytest.ini_options]
 addopts = "-q"

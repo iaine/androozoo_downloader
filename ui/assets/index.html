@@ -1,35 +1,130 @@
 <!DOCTYPE html>
-<html>
-    <head>
-        <title>AZ Downloader</title>
-        <link rel="stylesheet" href="styles.css">
-    </head>
-    <body>
-        <h2>AZ Downloader</h2>
-        <label for="story">AZ hashfiles</label>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AndroZoo Downloader</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
 
-        <textarea id="story" name="story" rows="25" cols="20">
-        Put hash files from AZ catalogue here...
-        </textarea>
-        <div class="button-container">
-			<button id="inputValue" class="toggle-fullscreen" onclick="sendValue">Download</button>
-		</div>
-        <script type="text/javascript">
-            Copy
-        window.addEventListner("pywebviewready",function (){
-            sendValue()
-        });
+  <header class="masthead">
+    <p class="eyebrow">SHA-256 &rarr; APK</p>
+    <h1>AndroZoo Downloader</h1>
+    <p class="lede">Paste, drop, or select a list of sha256 hashes. Each line is one APK.</p>
+  </header>
 
-        function sendValue () {
+  <main id="main" class="layout">
+    <!-- Step 1: hashes -->
+    <section class="panel" aria-labelledby="h-hashes">
+      <h2 id="h-hashes" class="panel-title"><span class="step">1</span> Hashes</h2>
 
-            // Get the input element by ID
+      <div
+        id="dropzone"
+        class="dropzone"
+        role="button"
+        tabindex="0"
+        aria-describedby="dropzone-hint">
+        <span class="dropzone-headline">Drop a hash file here</span>
+        <span id="dropzone-hint" class="dropzone-hint">
+          or press Enter to choose a file. You can also paste hashes below.
+        </span>
+      </div>
+      <!-- Real input is the accessible, single-pointer alternative to dragging. -->
+      <input id="file-input" type="file" accept=".txt,.csv,text/plain" class="visually-hidden">
 
-            var element = document.getElementById('inputValue');
+      <label for="hashes" class="field-label">Hash list (one sha256 per line)</label>
+      <textarea
+        id="hashes"
+        name="hashes"
+        class="mono"
+        rows="9"
+        spellcheck="false"
+        autocomplete="off"
+        placeholder="e.g. 3a5f...&#10;Lines starting with # are ignored."></textarea>
 
-            var value = element.value;
+      <p id="hash-count" class="count" role="status" aria-live="polite">No hashes yet.</p>
+    </section>
 
-            pywebview.api.send_value(value)
-        }
-        </script>
-    </body>
+    <!-- Step 2: settings -->
+    <section class="panel" aria-labelledby="h-settings">
+      <h2 id="h-settings" class="panel-title"><span class="step">2</span> Settings</h2>
+
+      <div class="field">
+        <label for="api-key" class="field-label">AndroZoo API key</label>
+        <input id="api-key" name="api-key" type="password" autocomplete="off"
+               class="mono" aria-describedby="api-key-hint">
+        <p id="api-key-hint" class="hint">Sent only to androzoo.uni.lu. Stored only for this session.</p>
+      </div>
+
+      <div class="field">
+        <label for="out-dir" class="field-label">Output folder</label>
+        <div class="row">
+          <input id="out-dir" name="out-dir" type="text" class="mono" aria-describedby="out-dir-hint">
+          <button id="browse" type="button" class="btn btn-secondary">Choose&hellip;</button>
+        </div>
+        <p id="out-dir-hint" class="hint">APKs are saved as <code>&lt;sha256&gt;.apk</code>.</p>
+      </div>
+
+      <fieldset class="field options">
+        <legend class="field-label">Options</legend>
+        <label class="check">
+          <input id="verify" type="checkbox" checked>
+          <span>Verify each download against its sha256</span>
+        </label>
+        <label class="check">
+          <input id="force" type="checkbox">
+          <span>Re-download files already present</span>
+        </label>
+        <label class="check inline-number">
+          <span>Parallel downloads</span>
+          <input id="concurrency" type="number" min="1" max="20" value="10"
+                 inputmode="numeric" aria-describedby="conc-hint">
+        </label>
+        <p id="conc-hint" class="hint">AndroZoo asks for 20 or fewer at once.</p>
+      </fieldset>
+    </section>
+
+    <!-- Step 3: run -->
+    <section class="panel panel-run" aria-labelledby="h-run">
+      <h2 id="h-run" class="panel-title"><span class="step">3</span> Run</h2>
+
+      <div class="controls">
+        <button id="start" type="button" class="btn btn-primary">Start download</button>
+        <button id="cancel" type="button" class="btn btn-secondary" disabled>Cancel</button>
+      </div>
+
+      <p id="error" class="error" role="alert" hidden></p>
+
+      <div class="progress-wrap">
+        <div class="progress-head">
+          <label id="progress-label" for="progress">Progress</label>
+          <span id="progress-pct" class="mono">0%</span>
+        </div>
+        <progress id="progress" max="100" value="0" aria-labelledby="progress-label progress-pct"></progress>
+        <!-- Polite, throttled summary for assistive tech; avoids per-row chatter. -->
+        <p id="live" class="live" role="status" aria-live="polite"></p>
+      </div>
+
+      <table class="results" aria-describedby="results-caption">
+        <caption id="results-caption" class="visually-hidden">
+          Per-hash download results, newest first.
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">Status</th>
+            <th scope="col">SHA-256</th>
+            <th scope="col">Detail</th>
+          </tr>
+        </thead>
+        <tbody id="results-body">
+          <tr class="empty"><td colspan="3">Results will appear here once a download starts.</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
 </html>
