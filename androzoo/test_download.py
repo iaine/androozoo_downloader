@@ -91,7 +91,7 @@ def serve(monkeypatch, payload=PAYLOAD, error=None, fail_times=0):
 def test_read_hashes_valid_and_normalised(tmp_path):
     f = tmp_path / "h.txt"
     f.write_text(f"{GOOD_SHA.upper()}\n{GOOD_SHA}\n")
-    assert core.read_hashes(f) == [GOOD_SHA, GOOD_SHA]  # lowercased, dups kept
+    assert core.read_hashes(f) == [GOOD_SHA]  # lowercased; duplicate dropped
 
 
 def test_read_hashes_skips_comments_blanks_and_invalid(tmp_path, caplog):
@@ -106,6 +106,23 @@ def test_read_hashes_strips_whitespace(tmp_path):
     f = tmp_path / "h.txt"
     f.write_text(f"   {GOOD_SHA}   \n")
     assert core.read_hashes(f) == [GOOD_SHA]
+
+
+def test_read_hashes_dedupes_preserving_order(tmp_path):
+    other = "b" * 64
+    f = tmp_path / "h.txt"
+    f.write_text(f"{GOOD_SHA}\n{other}\n{GOOD_SHA.upper()}\n{other}\n")
+    # First-seen order kept, later duplicates (incl. case variants) dropped.
+    assert core.read_hashes(f) == [GOOD_SHA, other]
+
+
+def test_is_valid_sha():
+    assert core.is_valid_sha("a" * 64)
+    assert core.is_valid_sha("A1" * 32)
+    assert not core.is_valid_sha("a" * 63)      # too short
+    assert not core.is_valid_sha("a" * 65)      # too long
+    assert not core.is_valid_sha("g" * 64)      # non-hex
+    assert not core.is_valid_sha("")
 
 
 # --------------------------------------------------------------------------- #
@@ -216,6 +233,95 @@ def test_download_incomplete_read_exhausts_to_failed(monkeypatch, job):
     res = core.download_one(job(retries=2))
     assert res.status is Status.FAILED
     assert "IncompleteRead" in res.message
+
+
+def test_download_429_retries_not_fast(monkeypatch, job):
+    """Rate limiting (429) is retryable, unlike 401/403/404."""
+    state = serve(monkeypatch, error=make_http_error(429, "Too Many Requests"))
+    res = core.download_one(job(retries=3))
+    assert res.status is Status.FAILED
+    assert state["calls"] == 3  # retried, did not fail fast
+    assert "429" in res.message
+
+
+def test_download_sets_user_agent_header(monkeypatch, job):
+    seen = {}
+
+    class R(io.BytesIO):
+        def __enter__(self): return self
+        def __exit__(self, *a): self.close()
+
+    def capture(req, timeout=None):
+        # download_one now passes a urllib.request.Request, not a bare URL.
+        seen["ua"] = req.get_header("User-agent")
+        seen["url"] = req.full_url
+        return R(PAYLOAD)
+
+    monkeypatch.setattr(core, "urlopen", capture)
+    core.download_one(job())
+    assert seen["ua"] == core.USER_AGENT
+    assert "androzoo.uni.lu" in seen["url"]
+    assert "$" not in seen["url"]  # regression: no stray shell-style template
+
+
+def test_download_cleans_up_partial_on_failure(monkeypatch, job, tmp_path):
+    from urllib.error import URLError
+
+    serve(monkeypatch, error=URLError("down"))
+    res = core.download_one(job(retries=2))
+    assert res.status is Status.FAILED
+    # No leftover .part file after giving up.
+    assert list(tmp_path.glob("*.part")) == []
+
+
+def test_download_streams_without_buffering_whole_file(monkeypatch, job, tmp_path):
+    """read() must be called with a chunk size, i.e. we stream, not slurp."""
+    payload = b"x" * (3 * (1 << 20) + 7)  # > 3 chunks
+    sha = hashlib.sha256(payload).hexdigest()
+    read_sizes = []
+
+    class ChunkedResp:
+        def __init__(self): self._buf = io.BytesIO(payload)
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self, size=-1):
+            read_sizes.append(size)
+            return self._buf.read(size)
+
+    monkeypatch.setattr(core, "urlopen", lambda req, timeout=None: ChunkedResp())
+    res = core.download_one(job(sha=sha))
+    assert res.status is Status.OK
+    assert (tmp_path / f"{sha}.apk").read_bytes() == payload
+    # Every read passed an explicit positive chunk size (never a full slurp).
+    assert read_sizes and all(s == core._CHUNK for s in read_sizes[:-1])
+
+
+# --------------------------------------------------------------------------- #
+# backoff helpers
+# --------------------------------------------------------------------------- #
+
+def test_parse_retry_after():
+    assert core._parse_retry_after("5") == 5.0
+    assert core._parse_retry_after(" 12 ") == 12.0
+    assert core._parse_retry_after(None) is None
+    assert core._parse_retry_after("Wed, 21 Oct 2099 07:28:00 GMT") is None  # date form
+
+
+def test_backoff_is_bounded_and_honours_retry_after(monkeypatch):
+    monkeypatch.setattr(core.random, "uniform", lambda a, b: b)  # take the cap
+    # Exponential, capped at 30.
+    assert core._backoff_seconds(1) == 2
+    assert core._backoff_seconds(3) == 8
+    assert core._backoff_seconds(10) == 30
+    # Retry-After overrides the exponential schedule.
+    assert core._backoff_seconds(10, retry_after=3.0) == 3.0
+
+
+def test_backoff_has_jitter():
+    # Full jitter: result lies within [0, base]; values vary across calls.
+    samples = {round(core._backoff_seconds(4), 4) for _ in range(50)}
+    assert len(samples) > 1
+    assert all(0 <= s <= 16 for s in samples)
 
 
 # --------------------------------------------------------------------------- #

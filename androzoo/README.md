@@ -225,8 +225,10 @@ spots are `window.create_file_dialog(...)` (the folder picker) and
 - **Cancellation** stops *pending* downloads but cannot abort an HTTP request
   already in flight; those finish before the run ends. Making cancellation
   instant would require checking the cancel flag inside the per-file worker.
-- **Rate limiting** is bounded only by the thread count. If AndroZoo pushes
-  back, lower `--concurrency` or add a token-bucket throttle.
+- **Rate limiting** is reactive: on HTTP 429 the client backs off (honouring
+  `Retry-After` when sent) and retries, and concurrency is capped at AndroZoo's
+  recommended maximum. There is no proactive throttle, so if you see frequent
+  429s, lower `--concurrency`.
 - **Input format** is one sha256 per line. AndroZoo's full CSV index has many
   columns; feeding that directly would need a column selector first.
 
